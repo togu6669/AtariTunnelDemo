@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build ASM",
+      "type": "shell",
+      "command": "../MADS/bin/windows_x86_64/mads.exe",
+      "args": [
+        "tunnel.asm",
+        "-o:build/tunnel.xex"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Run in Altirra",
+      "type": "shell",
+      "command": "../Altirra/Altirra64.exe",
+      "args": [
+        "build/tunnel.xex"
+      ]
+    }
+  ]
+}
