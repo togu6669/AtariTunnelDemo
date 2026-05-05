@@ -1,6 +1,6 @@
         ORG $2000
 
-SCREEN   = $4000
+SCREEN   = $4010
 SAVMSC   = $0058
 SDLSTL   = $0230
 SDMCTL   = $022F
@@ -92,41 +92,42 @@ DRAW
         LDA #>DIST_TABLE
         STA SRCPTR+1
 
-        LDA #<$4000
+        LDA #<$4010
         STA DST0PTR
-        LDA #>$4000
+        LDA #>$4010
         STA DST0PTR+1
-        LDA #<$4028
+        LDA #<$4038
         STA DST1PTR
-        LDA #>$4028
+        LDA #>$4038
         STA DST1PTR+1
-        LDA #<$4050
+        LDA #<$4060
         STA DST2PTR
-        LDA #>$4050
+        LDA #>$4060
         STA DST2PTR+1
-        LDA #<$4078
+        LDA #<$4088
         STA DST3PTR
-        LDA #>$4078
+        LDA #>$4088
         STA DST3PTR+1
-        LDA #<$40A0
+        LDA #<$40B0
         STA DST4PTR
-        LDA #>$40A0
+        LDA #>$40B0
         STA DST4PTR+1
-        LDA #<$40C8
+        LDA #<$40D8
         STA DST5PTR
-        LDA #>$40C8
+        LDA #>$40D8
         STA DST5PTR+1
-        LDA #<$40F0
+        LDA #<$4100
         STA DST6PTR
-        LDA #>$40F0
+        LDA #>$4100
         STA DST6PTR+1
-        LDA #<$4118
+        LDA #<$4128
         STA DST7PTR
-        LDA #>$4118
+        LDA #>$4128
         STA DST7PTR+1
 
         LDA #24
         STA ROWCNT
+
 ROW_LOOP
         LDY #0
 COL_LOOP
@@ -135,7 +136,7 @@ COL_LOOP
         ADC PHASE
         AND #$0F
         TAX
-        LDA SHADE_TABLE,X
+        LDA SHADE_TABLE_HARD,X
         STA (DST0PTR),Y
         STA (DST1PTR),Y
         STA (DST2PTR),Y
@@ -148,6 +149,7 @@ COL_LOOP
         CPY #40
         BNE COL_LOOP
 
+;tutaj wstawic wyciety kod
         CLC
         LDA SRCPTR
         ADC #40
@@ -234,17 +236,38 @@ ADVANCE_DST
 ; -------------------------
 ; Display list: tryb bitmapowy 160x192, 4 kolory
 ; -------------------------
-DISPLAY_LIST
-        .BYTE $4E,a(SCREEN)
-        :191 .BYTE $0E
-        .BYTE $41,a(DISPLAY_LIST)
 
+DISPLAY_LIST
+        .BYTE $4E, a($4010)   ; pierwsza linia z LMS
+        :101 .BYTE $0E        ; kolejne linie 1..102
+
+        .BYTE $4E, a($5000)   ; nowy LMS od linii 102
+        :89 .BYTE $0E         ; kolejne linie 104..191
+
+        .BYTE $41, a(DISPLAY_LIST)
 ; -------------------------
 ; Tablica cieniowania
 ; -------------------------
+; Preset 1: twarde progi, dobry do testu adresowania
+SHADE_TABLE_HARD
+        .BYTE $00,$00,$00,$00,$55,$55,$55,$55
+        .BYTE $AA,$AA,$AA,$AA,$FF,$FF,$FF,$FF
+
+; Preset 2: lagodne przejscie, dobry do sprawdzania geometrii
+SHADE_TABLE_SOFT
+        .BYTE $00,$00,$55,$55,$55,$AA,$AA,$AA
+        .BYTE $AA,$FF,$FF,$AA,$AA,$55,$55,$00
+
+; Preset 3: naprzemienne wzorce, dobry do testu aliasingu bitow
+SHADE_TABLE_ALIAS
+        .BYTE $00,$00,$55,$55,$AA,$AA,$FF,$FF
+        .BYTE $FF,$FF,$AA,$AA,$55,$55,$00,$00
+
+; Aktywny preset: podmien etykiete w nastepnej linii na
+; SHADE_TABLE_HARD / SHADE_TABLE_SOFT / SHADE_TABLE_ALIAS
 SHADE_TABLE
-        .BYTE $00,$00,$55,$55,$AA,$FF,$FF,$AA
-        .BYTE $55,$00,$00,$55,$AA,$FF,$FF,$AA
+        .BYTE $00,$00,$00,$00,$55,$55,$55,$55
+        .BYTE $AA,$AA,$AA,$AA,$FF,$FF,$FF,$FF
 
 ; -------------------------
 ; Tablica dystansu
