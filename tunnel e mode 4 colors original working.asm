@@ -26,7 +26,7 @@ DST7PTR  = $90
 ; -------------------------
 ; Zmienne
 ; -------------------------
-PHASE   .BYTE $FF
+PHASE   .BYTE 0
 ROWCNT  .BYTE 0
 
 ; -------------------------
@@ -34,12 +34,10 @@ ROWCNT  .BYTE 0
 ; -------------------------
 START
         JSR INIT_SCREEN
-        JSR MUSIC_INIT ; backend audio jest podmieniany przez rmt.asm
 MAIN
-        JSR WAIT_VBL
-        JSR MUSIC_PLAY_FRAME ; jedna aktualizacja muzyki na klatke
         JSR DRAW
-        DEC PHASE
+        JSR WAIT_VBL
+        INC PHASE
         JMP MAIN
 
 ; -------------------------
@@ -63,26 +61,7 @@ INIT_SCREEN
         STA DMACTL
 
 
-        LDA #$00
-        STA COLOR4          ; black background
-
-        LDA #$00
-        STA COLOR0          ; neon red
-        LDA #$00
-        STA COLOR1          ; neon green
-        LDA #$9A
-        STA COLOR2          ; electric blue
-
  .IF 0       
-        LDA #$46
-        STA COLOR0          ; neon red
-        LDA #$5C
-        STA COLOR1          ; neon green
-        LDA #$9A
-        STA COLOR2          ; electric blue
-        ; LDA #$1E
-        ; STA COLOR3          ; bright yellow - nie uzywany, bo w trybie 4 kolorow jest tylko 3 kolory plus tlo
-
         ; CRT NEon
         LDA #$00
         STA COLOR4
@@ -94,7 +73,7 @@ INIT_SCREEN
         STA COLOR2
         LDA #$BE
         STA COLOR3
-        ; standardowe szare kolory
+
         LDA #$04
         STA COLOR0
         LDA #$08
@@ -184,7 +163,7 @@ COL_LOOP
         CPY #40
         BNE COL_LOOP
 
-; koniec petli po 40 kolumnach, przesun wskaznik zrodlowy o 40 bajtow
+;tutaj wstawic wyciety kod
         CLC
         LDA SRCPTR
         ADC #40
@@ -332,8 +311,6 @@ DIST_TABLE
         .BYTE 5,5,4,3,2,1,0,15,15,14,13,12,12,11,10,10,9,9,9,9,9,9,9,9,9,10,10,11,12,12,13,14,15,15,0,1,2,3,4,5
         .BYTE 6,5,4,3,2,2,1,0,15,14,14,13,12,12,11,11,10,10,10,10,10,10,10,10,10,11,11,12,12,13,14,14,15,0,1,2,2,3,4,5
         .BYTE 6,5,5,4,3,2,1,1,0,15,14,14,13,13,12,12,11,11,11,11,11,11,11,11,11,12,12,13,13,14,14,15,0,1,1,2,3,4,5,5
-
-        ICL "rmt.asm"
 
 ; adres startowy programu
         ORG $02E0
