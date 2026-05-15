@@ -23,21 +23,20 @@ DST5PTR  = $8C
 DST6PTR  = $8E
 DST7PTR  = $90
 
+STEREOMODE equ 0				;0 => compile RMTplayer for mono 4 tracks
+
 ; -------------------------
 ; Zmienne
 ; -------------------------
 PHASE   .BYTE $FF
 ROWCNT  .BYTE 0
-
 ; -------------------------
 ; Start
 ; -------------------------
 START
         JSR INIT_SCREEN
-        JSR MUSIC_INIT ; backend audio jest podmieniany przez rmt.asm
 MAIN
         JSR WAIT_VBL
-        JSR MUSIC_PLAY_FRAME ; jedna aktualizacja muzyki na klatke
         JSR DRAW
         DEC PHASE
         JMP MAIN
@@ -332,8 +331,6 @@ DIST_TABLE
         .BYTE 5,5,4,3,2,1,0,15,15,14,13,12,12,11,10,10,9,9,9,9,9,9,9,9,9,10,10,11,12,12,13,14,15,15,0,1,2,3,4,5
         .BYTE 6,5,4,3,2,2,1,0,15,14,14,13,12,12,11,11,10,10,10,10,10,10,10,10,10,11,11,12,12,13,14,14,15,0,1,2,2,3,4,5
         .BYTE 6,5,5,4,3,2,1,1,0,15,14,14,13,13,12,12,11,11,11,11,11,11,11,11,11,12,12,13,13,14,14,15,0,1,1,2,3,4,5,5
-
-        ICL "rmt.asm"
 
 ; adres startowy programu
         ORG $02E0
