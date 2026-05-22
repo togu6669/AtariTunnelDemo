@@ -1,0 +1,73 @@
+<!doctype html>
+<meta charset="utf-8">
+<pre id="out">working</pre>
+<script type="module">
+const out = document.getElementById("out");
+const write = (value) => { out.textContent = JSON.stringify(value, null, 2); };
+
+function rms(values) {
+  let sum = 0;
+  for (let i = 0; i < values.length; i++) sum += values[i] * values[i];
+  return Math.sqrt(sum / Math.max(1, values.length));
+}
+
+function localPeaks(values, minDistance) {
+  const peaks = [];
+  const max = Math.max(...values);
+  const threshold = max * 0.45;
+  for (let i = 1; i < values.length - 1; i++) {
+    if (values[i] > threshold && values[i] > values[i - 1] && values[i] >= values[i + 1]) {
+      if (peaks.length === 0 || i - peaks[peaks.length - 1] >= minDistance) {
+        peaks.push(i);
+      } else if (values[i] > values[peaks[peaks.length - 1]]) {
+        peaks[peaks.length - 1] = i;
+      }
+    }
+  }
+  return peaks;
+}
+
+try {
+  const response = await fetch("../psytechno.mp3");
+  const bytes = await response.arrayBuffer();
+  const ctx = new AudioContext();
+  const audio = await ctx.decodeAudioData(bytes);
+  const ch = audio.getChannelData(0);
+  const frame = 1024;
+  const hop = 512;
+  const env = [];
+  const diff = [];
+  let prev = 0;
+  for (let pos = 0; pos + frame < ch.length; pos += hop) {
+    const value = rms(ch.subarray(pos, pos + frame));
+    env.push(value);
+    diff.push(Math.max(0, value - prev));
+    prev = value;
+  }
+
+  const fps = audio.sampleRate / hop;
+  const candidates = [];
+  for (let bpm = 90; bpm <= 190; bpm += 1) {
+    const lag = Math.round((60 / bpm) * fps);
+    let score = 0;
+    for (let i = lag; i < diff.length; i++) score += diff[i] * diff[i - lag];
+    candidates.push({ bpm, score });
+  }
+  candidates.sort((a, b) => b.score - a.score);
+
+  const peaks = localPeaks(diff, Math.round(fps * 0.12));
+  const peakTimes = peaks.map((i) => +(i / fps).toFixed(3)).slice(0, 32);
+
+  write({
+    duration: +audio.duration.toFixed(3),
+    sampleRate: audio.sampleRate,
+    channels: audio.numberOfChannels,
+    bestBpm: candidates.slice(0, 8).map(({bpm, score}) => ({bpm, score: +score.toFixed(6)})),
+    peakTimes,
+    envelopeFrames: env.length,
+  });
+  ctx.close();
+} catch (error) {
+  write({ error: String(error), stack: error.stack });
+}
+</script>

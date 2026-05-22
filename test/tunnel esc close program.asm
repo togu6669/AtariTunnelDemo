@@ -12,11 +12,9 @@ COLOR4   = $02C8
 RTCLOK60 = $0014
 DOSVEC   = $000A
 CH       = $02FC
-VVBLKD   = $0224
 DMACTL   = $D400
 DLISTL   = $D402
-SETVBV   = $E45C
-XITVBV   = $E462
+; VCOUNT   = $D40B
 
 KEY_NONE = $FF
 KEY_ESC  = $1C
@@ -51,8 +49,6 @@ modul
 ; -------------------------
 PHASE   .BYTE $FF
 ROWCNT  .BYTE 0
-OLD_VVBLKD .WORD 0
-
 ; -------------------------
 ; Start
 ; -------------------------
@@ -62,13 +58,23 @@ START
         lda #0
         JSR music.init_song        
         JSR INIT_SCREEN
-        JSR INSTALL_MUSIC_VBI
+        LDA #KEY_NONE
+        STA CH
 
 MAIN
+        JSR music.play
         JSR WAIT_VBL
+        JSR CHECK_ESC
+        BCS EXIT
         JSR DRAW
         DEC PHASE
         JMP MAIN
+
+EXIT
+        JSR music.stop
+        LDA #KEY_NONE
+        STA CH
+        JMP (DOSVEC)
 
 ; -------------------------
 ; Czekaj na kolejna ramke
@@ -80,33 +86,21 @@ WAIT_LOOP
         BEQ WAIT_LOOP
         RTS
 
-INSTALL_MUSIC_VBI
-        LDA VVBLKD
-        STA OLD_VVBLKD
-        LDA VVBLKD+1
-        STA OLD_VVBLKD+1
-
-        LDA #7
-        LDX #>MUSIC_VBI
-        LDY #<MUSIC_VBI
-        JSR SETVBV
+; -------------------------
+; obsluga klawisza ESC - jesli wcisniety, to ustawiamy CH na KEY_NONE i zwracamy przeniesienie, zeby zakonczyc program
+; -------------------------
+CHECK_ESC
+        LDA CH
+        CMP #KEY_ESC
+        BNE NO_ESC
+        LDA #KEY_NONE
+        STA CH
+        SEC
         RTS
 
-MUSIC_VBI
-        PHA
-        TXA
-        PHA
-        TYA
-        PHA
-
-        JSR music.play
-
-        PLA
-        TAY
-        PLA
-        TAX
-        PLA
-        JMP XITVBV
+NO_ESC
+        CLC
+        RTS
 
 ; -------------------------
 ; Inicjalizacja ekranu
