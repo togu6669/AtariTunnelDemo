@@ -28,15 +28,10 @@ TITLE_DLIST = $5F00
 
 SDLSTL   = $0230
 SDLSTH   = $0231
-SDMCTL   = $022F
 CH       = $02FC
-DMACTL   = $D400
-DLISTL   = $D402
-DLISTH   = $D403
 
 _DL_SAVE_L .BYTE 0
 _DL_SAVE_H .BYTE 0
-_DMA_SAVE  .BYTE 0
 
 ; ---------------------------------------------------------------------------
 ; SHOW_TITLE
@@ -46,8 +41,6 @@ SHOW_TITLE
         STA _DL_SAVE_L
         LDA SDLSTH
         STA _DL_SAVE_H
-        LDA SDMCTL
-        STA _DMA_SAVE
 
         ; clear from $6000, 31 pages = $1F00 bytes (covers $6000..$7EFF)
         LDA #0
@@ -77,14 +70,8 @@ _CLR_PAGE
 
         LDA #<TITLE_DLIST
         STA SDLSTL
-        STA DLISTL
         LDA #>TITLE_DLIST
         STA SDLSTH
-        STA DLISTH
-
-        LDA #$22
-        STA SDMCTL
-        STA DMACTL
 
         LDA #$FF            ; clear keyboard buffer
         STA CH
@@ -94,19 +81,14 @@ _WAIT_KEY
 
         LDA _DL_SAVE_L
         STA SDLSTL
-        STA DLISTL
         LDA _DL_SAVE_H
         STA SDLSTH
-        STA DLISTH
-        LDA _DMA_SAVE
-        STA SDMCTL
-        STA DMACTL
 
         RTS
 
 ; ---------------------------------------------------------------------------
 ; _BUILD_DLIST  –  ANTIC mode-F DL at TITLE_DLIST
-; 74 blanks + 44 mode-F title lines + 74 blanks.
+; 8 blank lines + 192 mode-F lines split at the 4K boundary ($7000):
 ;   line 0..101 from $6010  (102 lines * 40 = 4080 bytes → ends at $6FFF)
 ;   line 102..191 from $7000 ($6010 + 102*40 = $7000, no boundary crossing)
 ; ---------------------------------------------------------------------------
@@ -117,20 +99,26 @@ _BUILD_DLIST
         STA $FB
         LDY #0
 
-        JSR _BLD_74_BLANKS  ; center the 44-line title band vertically
+        LDA #$70            ; 8 blank scan-line instructions
+        LDX #8
+_BLD_BLK
+        STA ($FA),Y
+        INY
+        DEX
+        BNE _BLD_BLK
 
-        LDA #$4F            ; first LMS: title band from row 74
+        LDA #$4F            ; first LMS: mode F from $6010
         STA ($FA),Y
         INY
-        LDA #<(TITLE_SCRN + 74 * 40)
+        LDA #<TITLE_SCRN
         STA ($FA),Y
         INY
-        LDA #>(TITLE_SCRN + 74 * 40)
+        LDA #>TITLE_SCRN
         STA ($FA),Y
         INY
 
-        LDA #$0F            ; 27 mode-F lines (+ LMS line = 28)
-        LDX #27
+        LDA #$0F            ; 101 mode-F lines (+ LMS line = 102)
+        LDX #101
 _BLD_F1
         STA ($FA),Y
         INY
@@ -147,15 +135,13 @@ _BLD_F1
         STA ($FA),Y
         INY
 
-        LDA #$0F            ; 15 mode-F lines (+ LMS line = 16; 28+16=44)
-        LDX #15
+        LDA #$0F            ; 89 mode-F lines (+ LMS line = 90; 102+90=192)
+        LDX #89
 _BLD_F2
         STA ($FA),Y
         INY
         DEX
         BNE _BLD_F2
-
-        JSR _BLD_74_BLANKS
 
         LDA #$41            ; JVB back to start of display list
         STA ($FA),Y

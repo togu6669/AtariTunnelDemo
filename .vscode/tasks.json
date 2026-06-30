@@ -6,8 +6,8 @@
       "type": "shell",
       "command": "../MADS/bin/windows_x86_64/mads.exe",
       "args": [
-        "der_tunnel.asm",
-        "-o:build/der_tunnel.xex"
+        "${file}",
+        "-o:build/${fileBasenameNoExtension}.xex"
       ],
       "group": {
         "kind": "build",
@@ -19,7 +19,7 @@
       "type": "shell",
       "command": "../Altirra/Altirra64.exe",
       "args": [
-        "build/der_tunnel.xex"
+        "build/${fileBasenameNoExtension}.xex"
       ]
     }
   ]

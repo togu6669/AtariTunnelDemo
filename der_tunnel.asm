@@ -24,14 +24,19 @@
         ORG $3800           ; safe standalone address; keep when icl'd
 
 TITLE_SCRN  = $6010
-TITLE_DLIST = $5F00
 
 SDLSTL   = $0230
 SDLSTH   = $0231
+SDMCTL   = $022F
 CH       = $02FC
+DMACTL   = $D400
+DLISTL   = $D402
+DLISTH   = $D403
+RTCLOK60 = $0014
 
 _DL_SAVE_L .BYTE 0
 _DL_SAVE_H .BYTE 0
+_DMA_SAVE  .BYTE 0
 
 ; ---------------------------------------------------------------------------
 ; SHOW_TITLE
@@ -41,6 +46,8 @@ SHOW_TITLE
         STA _DL_SAVE_L
         LDA SDLSTH
         STA _DL_SAVE_H
+        LDA SDMCTL
+        STA _DMA_SAVE
 
         ; clear from $6000, 31 pages = $1F00 bytes (covers $6000..$7EFF)
         LDA #0
@@ -59,99 +66,91 @@ _CLR_PAGE
         BNE _CLR_PAGE
 
         JSR _COPY_BAND
-        JSR _BUILD_DLIST
 
-        LDA #$0F            ; COLPF1 = white pixels
+        LDA #$0F        ; COLPF1 = white pixels
         STA $02C5
-        LDA #$00            ; COLPF2 = black background
+        LDA #$00        ; COLPF2 = black background
         STA $02C6
         LDA #$00
         STA $02C8
 
         LDA #<TITLE_DLIST
         STA SDLSTL
+        STA DLISTL
         LDA #>TITLE_DLIST
         STA SDLSTH
+        STA DLISTH
+
+        LDA #$22
+        STA SDMCTL
+        STA DMACTL
+
+        JSR FADE
 
         LDA #$FF            ; clear keyboard buffer
         STA CH
+
 _WAIT_KEY
         CMP CH              ; loop until CH != $FF (key pressed)
         BEQ _WAIT_KEY
 
         LDA _DL_SAVE_L
         STA SDLSTL
+        STA DLISTL
         LDA _DL_SAVE_H
         STA SDLSTH
+        STA DLISTH
+        LDA _DMA_SAVE
+        STA SDMCTL
+        STA DMACTL
 
         RTS
 
+; -------------------------
+; Display list: tryb bitmapowy 320x192, 2 kolory
+; -------------------------
+
+TITLE_DLIST
+        .BYTE $4F, a($6010)   ; pierwsza linia z LMS
+        :101 .BYTE $0F        ; kolejne linie 1..102
+
+        .BYTE $4F, a($7000)   ; nowy LMS od linii 102
+        :89 .BYTE $0F         ; kolejne linie 104..191
+
+        .BYTE $41, a(TITLE_DLIST)
+; -------------------------
+
 ; ---------------------------------------------------------------------------
-; _BUILD_DLIST  –  ANTIC mode-F DL at TITLE_DLIST
-; 8 blank lines + 192 mode-F lines split at the 4K boundary ($7000):
-;   line 0..101 from $6010  (102 lines * 40 = 4080 bytes → ends at $6FFF)
-;   line 102..191 from $7000 ($6010 + 102*40 = $7000, no boundary crossing)
+; FRAME_WAIT  –  wait for next frame (RTCLOK60 increments every 1/60th of a second)
 ; ---------------------------------------------------------------------------
-_BUILD_DLIST
-        LDA #<TITLE_DLIST
-        STA $FA
-        LDA #>TITLE_DLIST
-        STA $FB
-        LDY #0
 
-        LDA #$70            ; 8 blank scan-line instructions
-        LDX #8
-_BLD_BLK
-        STA ($FA),Y
-        INY
-        DEX
-        BNE _BLD_BLK
+FRAME_WAIT
+        LDA RTCLOK60    ; wait for next frame (RTCLOK60 increments every 1/60th of a second)
+_WAIT_LOOP
+        CMP RTCLOK60
+        BEQ _WAIT_LOOP
+        RTS
 
-        LDA #$4F            ; first LMS: mode F from $6010
-        STA ($FA),Y
-        INY
-        LDA #<TITLE_SCRN
-        STA ($FA),Y
-        INY
-        LDA #>TITLE_SCRN
-        STA ($FA),Y
-        INY
+; ---------------------------------------------------------------------------
+; FADE  –  fade out by decrementing COLPF1 (white) to black
+; ---------------------------------------------------------------------------
 
-        LDA #$0F            ; 101 mode-F lines (+ LMS line = 102)
-        LDX #101
-_BLD_F1
-        STA ($FA),Y
-        INY
-        DEX
-        BNE _BLD_F1
+FADE    
+        LDX #60      ; wait 1 second before starting fade (60 frames at 60Hz)
+_SEC_WAIT_LOOP
+        JSR FRAME_WAIT
+        DEX            
+        BNE _SEC_WAIT_LOOP
 
-        LDA #$4F            ; second LMS at 4K boundary: $6010 + 102*40 = $7000
-        STA ($FA),Y
-        INY
-        LDA #<(TITLE_SCRN+102*40)
-        STA ($FA),Y
-        INY
-        LDA #>(TITLE_SCRN+102*40)
-        STA ($FA),Y
-        INY
+_FADE    
+        LDX #5          ; 5 steps in the fade outer loop (0.1 second at 60Hz)
+_5STEPS_LOOP
+        JSR FRAME_WAIT
+        DEX            ; decrement fade step counter
+        BNE _5STEPS_LOOP
 
-        LDA #$0F            ; 89 mode-F lines (+ LMS line = 90; 102+90=192)
-        LDX #89
-_BLD_F2
-        STA ($FA),Y
-        INY
-        DEX
-        BNE _BLD_F2
-
-        LDA #$41            ; JVB back to start of display list
-        STA ($FA),Y
-        INY
-        LDA #<TITLE_DLIST
-        STA ($FA),Y
-        INY
-        LDA #>TITLE_DLIST
-        STA ($FA),Y
-
+        DEC $02C5      ; decrement COLPF1 (white) to fade out
+        BNE _FADE
         RTS
 
 ; ---------------------------------------------------------------------------
