@@ -69,3 +69,46 @@ To change the music: swap `music.rmt`, re-export `music.feat` from RMT, then reb
 ### `test/` directory
 
 Contains earlier experimental versions of the effect (character-based, single-colour, escape-key exit). Not assembled by the main build.
+
+---
+
+## `man_scroll.asm` — sprite coarse-scroll experiment
+
+Standalone program (no music, no tunnel) that draws a man sprite on a GR.7 (mode `$0E`) bitmap and coarse-scrolls it.
+
+- Loads at `$2000`. Run address vector at `$02E0` → `ANIM_MAIN`.
+- Build: `mads.exe man_scroll.asm -o:build/man_scroll.xex`
+
+### Display list (`ANIM_DLIST`, assembled at `$2300`)
+
+Antic mode `$0E` (160×192, 4-colour), split across two LMS entries:
+
+| LMS label | Default address | Rows covered |
+|---|---|---|
+| `SCRN_LO_DL` | `SCRN_LO` = `$4010` | 0–101 (102 rows) |
+| `SCRN_HI_DL` | `SCRN_HI` = `$5000` | 102–191 (90 rows) |
+
+The split is necessary because 192 mode-E rows × 40 bytes = 7680 bytes, which crosses a 4 KB ANTIC boundary. `SCRN_SPLIT = 102` is the first row stored in the high half.
+
+DMA is disabled (`SDMCTL = $00`) during setup, then re-enabled with `LDA #$22 : STA SDMCTL` before the main loop.
+
+### Coarse scrolling (`coarse_scroll_down`)
+
+Scrolls the viewport one pixel row down by adding **40** (one mode-E row width) to each LMS address in the display list. Both `SCRN_LO_DL` and `SCRN_HI_DL` are updated as full 16-bit adds (with carry propagation to the high byte). Adding only 1 instead of 40 is a common mistake — it shifts by one byte, not one row.
+
+### Row address table
+
+`INIT_ROW_TABLE` pre-computes `ROW_TBL_LO` / `ROW_TBL_HI` (192 entries, stride 40) so `DRAW_SPR_FULL` and `CLEAR_SCREEN` can address any screen row without on-the-fly multiplication.
+
+### Memory map (`man_scroll.asm`)
+
+| Address | Contents |
+|---|---|
+| `$00B0`–`$00BF` | Zero-page variables (MAN_X, MAN_YL, accumulators, scratch) |
+| `$2000` | `ANIM_MAIN` entry point |
+| `$2300` | `ANIM_DLIST` display list |
+| `$2400` | `ROW_TBL_LO` (192 bytes) |
+| `$24C0` | `ROW_TBL_HI` (192 bytes) |
+| `$2580` | Sprite data (`graphics/sprite_data.asm`) |
+| `$4010`–`$4FFF` | Screen RAM low half |
+| `$5000`–`$5E0F` | Screen RAM high half |

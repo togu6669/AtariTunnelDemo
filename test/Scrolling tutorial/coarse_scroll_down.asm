@@ -1,8 +1,8 @@
 ; Written in 2019 by Rob McMullen, https://playermissile.com/scrolling_tutorial/
 ; Copyright and related rights waived via CC0: https://creativecommons.org/publicdomain/zero/1.0/
-        *= $3000
+        ORG $3000
 
-.include "hardware.s"
+        icl "hardware.s"
 
 delay = 15
 
@@ -61,10 +61,10 @@ static_text
         .sbyte       " ANTIC MODE 2, NOT SCROLLED, SECOND LINE"
 
 
-.include "util_font.s"
-.include "util_scroll.s"
-.include "font_data_antic4.s"
+        icl "util_font.s"
+        icl "util_scroll.s"
+        icl "font_data_antic4.s"
 
 ; tell DOS where to run the program when loaded
-        * = $2e0
+        ORG $2e0
         .word init
