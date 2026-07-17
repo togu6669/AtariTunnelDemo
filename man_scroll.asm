@@ -12,13 +12,12 @@ RTCLOK60 = $0014     ; 3rd byte of RTCLOCK (increments at 60Hz)
 DOSVEC   = $000A
 
 ; ── Screen RAM ────────────────────────────────────────────────────────────────
-; SCRN_LO    = $4010   ; rows   0-101  (102 x 40 = 4080 bytes, ends $4FFF)
-; SCRN_HI    = $5000   ; rows 102-191  ( 90 x 40 = 3600 bytes, ends $5E0F)
-; SCRN_SPLIT = 102     ; first row stored in SCRN_HI
+;SCRN_LO_CLS= $4F60   ; beginning of screen RAM for CLEAR_SCREEN routine
+SCRN_LO_CLS= $5000   ; beginning of screen RAM for CLEAR_SCREEN routine
+SCRN_HI_CLS= $5E10   ; $5E10 reversed rows 102-191  ( 90 x 40 = 3600 bytes, begins $5000)
 
-SCRN_LO    = $4FFF   ; reversed rows for scrolling down  0-101  (102 x 40 = 4080 bytes, beginning $4010)
-SCRN_HI    = $5E0F   ; reversed rows 102-191  ( 90 x 40 = 3600 bytes, ends $5000)
-SCRN_SPLIT = 102     ; first row stored in SCRN_HI
+SCRN_LO    = $4010   ; reversed rows for scrolling down  0-101  (102 x 40 = 4080 bytes, beginning $4010)
+SCRN_SPLIT = 102     ; first row stored in SCRN_HI_CLS, last row stored in SCRN_LO
 
 ; ── Sprite dimensions ─────────────────────────────────────────────────────────
 SPR_W  = 24          ; bytes per row  (96 px / 4 px/byte)
@@ -48,7 +47,7 @@ ROWPTR   .DS 2    ; scratch: current screen row address
 SPRPTR   .DS 2    ; scratch: sprite data pointer
 STEP_X   .DS 1    ; flag: 1 if X stepped this frame
 STEP_Y   .DS 1    ; flag: 1 if Y stepped this frame
-    
+
     ORG $2000
 
 ANIM_MAIN
@@ -65,7 +64,7 @@ ANIM_MAIN
         STA COLOR1
         STA COLOR3
         STA COLOR4
-        LDA #$0F            ; white
+        LDA #$8F            ; blue, $0F white
         STA COLOR2
 
         ; Clear and pre-draw with DMA off (no flicker)
@@ -92,7 +91,7 @@ ANIM_MAIN
         STA SDMCTL
 
 
-loop    ldx #2          ; number of VBLANKs to wait
+loop    ldx #0          ; number of VBLANKs to wait
 
 _start  lda RTCLOK60    ; check fastest moving RTCLOCK byte
 _wait   cmp RTCLOK60    ; VBLANK will update this
@@ -101,21 +100,45 @@ _wait   cmp RTCLOK60    ; VBLANK will update this
         bpl _start
 
         ; enough time has passed, scroll one line
+        lda SCRN_LO_DL  ; compare display list start address with SCRN_LO
+        cmp #<SCRN_LO
+        BNE not_equal        ; if display list start address is less than SCRN_LO, we are done scrolling
+
+        lda SCRN_LO_DL+1  ; compare display list start address with SCRN_LO
+        cmp #>SCRN_LO
+        BNE not_equal        ; if display list start address is less than SCRN_LO, we are done scrolling
+
+        jmp equal
+
+not_equal
         jsr coarse_scroll_down
 
+equal
         jmp loop
 
 ; move viewport one line down by pointing display list start address
 
 coarse_scroll_down
-        clc
-        lda SCRN_LO_DL   ; move display list start address down by 40 bytes (1 row)
-        sbc #40
-        sta SCRN_LO_DL
-        lda SCRN_LO_DL+1
-        sbc #0
-        sta SCRN_LO_DL+1
 
+        ldx #80          
+        ldy #0
+        
+
+loop2   SEC
+        lda SCRN_LO_DL, Y   ; move display list start address down by 40 bytes (1 row)
+        sbc #40          ; SBC always subtracts carry, so SEC is needed to subtract 40       
+        sta SCRN_LO_DL, Y
+        lda SCRN_LO_DL+1, Y
+        sbc #0
+        sta SCRN_LO_DL+1, Y
+
+        INY
+        INY
+        INY
+        dex
+        bne loop2
+        
+        SEC
         lda SCRN_HI_DL  ; move display list secondary address down by 40 bytes (1 row)
         sbc #40
         sta SCRN_HI_DL
@@ -127,10 +150,10 @@ coarse_scroll_down
 
 ; ─── CLEAR_SCREEN ─────────────────────────────────────────────────────────────
 ; Zeros 384 rows (double-height virtual screen) × 40 bytes = 15360 bytes
-; starting at SCRN_LO.  Uses a direct pointer; does not need the row table.
+; starting at SCRN_LO_CLS.  Uses a direct pointer; does not need the row table.
 ; 16-bit row counter: ACC_X (hi) : X (lo).  Terminates at ACC_X:X = $01:$80.
 CLEAR_SCREEN:
-    LDA #<SCRN_LO
+    LDA #<SCRN_LO 
     STA ROWPTR
     LDA #>SCRN_LO
     STA ROWPTR+1
@@ -200,22 +223,197 @@ ANIM_DLIST
         .BYTE $70,$70,$70       ; 3x8=24 blank scan lines
         .BYTE $4E               ; mode E + LMS
 SCRN_LO_DL
-        .WORD SCRN_LO           ; $4010 or $4FFF (ANTIC 4KB boundary)
-        .REPT 101
-        .BYTE $0E               ; rows 1-101
+        .WORD SCRN_LO_CLS       ; 1
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+40     ; 2
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+80     ; 3
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+120     ; 4
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+160     ; 5
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+200     ; 6
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+240     ; 7
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+280     ; 8
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+320     ; 9
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+360     ; 10
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+400     ; 11
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+440     ; 12
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+480     ; 13
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+520     ; 14
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+560     ; 15
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+600     ; 16
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+640     ; 17
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+680     ; 18
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+720     ; 19
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+760     ; 20
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+800     ; 21
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+840      ; 22
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+880      ; 23
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+920      ; 24
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+960      ; 25
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1000     ; 26
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1040     ; 27
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1080     ; 28
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1120     ; 29
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1160     ; 30
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1200     ; 31
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1240     ; 32
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1280     ; 33
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1320     ; 34
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1360     ; 35
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1400     ; 36
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1440     ; 37
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1480     ; 38
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1520     ; 39
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1560     ; 40
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1600     ; 41
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1640     ; 42
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1680     ; 43
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1720     ; 44
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1760     ; 45
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1800     ; 46
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1840     ; 47
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1880     ; 48
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1920     ; 49
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+1960     ; 50
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2000     ; 51
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2040     ; 52
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2080     ; 53
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2120     ; 54
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2160     ; 55
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2200     ; 56
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2240     ; 57
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2280     ; 58
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2320     ; 59
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2360     ; 60
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2400     ; 61
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2440     ; 62
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2480     ; 63
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2520     ; 64
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2560     ; 65
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2600     ; 66
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2640     ; 67
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2680     ; 68
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2720     ; 69
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2760     ; 70
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2800     ; 71
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2840     ; 72
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2880     ; 73
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2920     ; 74
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+2960     ; 75
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+3000     ; 76
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+3040     ; 77
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+3080     ; 78
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+3120     ; 79
+        .BYTE $4E               ; mode E + LMS
+        .WORD SCRN_LO_CLS+3160     ; 80
+        .REPT 21
+        .BYTE $0E               ; rows 81-101
         .ENDR
         .BYTE $4E               ; mode E + LMS
 SCRN_HI_DL
-        .WORD SCRN_HI           ; $5000 or $5E0F (ANTIC 4KB boundary)
+        .WORD SCRN_HI_CLS       ; $5E0F down to $5000 (ANTIC 4KB boundary)
         .REPT 89
         .BYTE $0E               ; rows 103-191
         .ENDR
         .BYTE $41               ; JVB
         .WORD ANIM_DLIST
 
+;ANIM_DLIST 
+;        .BYTE $70,$70,$70       ; 3x8=24 blank scan lines
+;        .BYTE $4E               ; mode E + LMS
+;SCRN_LO_DL
+;        .WORD SCRN_LO_CLS       ; $4FD8 down to $4010  (ANTIC 4KB boundary)
+;        .REPT 100
+;        .BYTE $0E               ; rows 1-100
+;        .ENDR
+;        .BYTE $4E               ; mode E + LMS
+;SCRN_HI_DL
+;        .WORD SCRN_HI_CLS       ; $5E0F down to $5000 (ANTIC 4KB boundary)
+;        .REPT 89
+;        .BYTE $0E               ; rows 103-191
+;        .ENDR
+;        .BYTE $41               ; JVB
+;        .WORD ANIM_DLIST
+
 
 ; ─── Sprite data ──────────────────────────────────────────────────────────────
-    ORG $2400
+    ORG $2600
         icl "graphics/sprite_data.asm"
 
 ; tell DOS where to run the program when loaded

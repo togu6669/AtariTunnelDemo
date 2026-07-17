@@ -37,13 +37,13 @@ init_song = RASTERMUSICTRACKER+0
 play      = RASTERMUSICTRACKER+3
 stop      = RASTERMUSICTRACKER+9
 
-        icl "music.feat"
+        icl "\Music\music.feat"
 player
-        icl "rmt_player.asm"	                        ;include RMT player demo code (with music module and features definitions)
-        icl "rmt_relocator.asm"		
+        icl "\Music\rmt_player.asm"	                        ;include RMT player demo code (with music module and features definitions)
+        icl "\Music\rmt_relocator.asm"		
 
 modul
-        rmt_relocator 'music.rmt' modul		;include music RMT module
+        rmt_relocator '\Music\music.rmt' modul		;include music RMT module
         .endp
 
 ; -------------------------
