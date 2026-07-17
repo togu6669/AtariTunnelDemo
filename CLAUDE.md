@@ -83,10 +83,10 @@ Standalone program (no music, no tunnel) that draws a man sprite on a GR.7 (mode
 
 Antic mode `$0E` (160×192, 4-colour), split across two LMS entries:
 
-| LMS label | Default address | Rows covered |
+| LMS label | Address constant | Rows covered |
 |---|---|---|
-| `SCRN_LO_DL` | `SCRN_LO` = `$4010` | 0–101 (102 rows) |
-| `SCRN_HI_DL` | `SCRN_HI` = `$5000` | 102–191 (90 rows) |
+| `SCRN_LO_DL` | `SCRN_LO` = `$4FFF` | 0–101 (102 rows) |
+| `SCRN_HI_DL` | `SCRN_HI` = `$5E0F` | 102–191 (90 rows) |
 
 The split is necessary because 192 mode-E rows × 40 bytes = 7680 bytes, which crosses a 4 KB ANTIC boundary. `SCRN_SPLIT = 102` is the first row stored in the high half.
 
@@ -94,21 +94,27 @@ DMA is disabled (`SDMCTL = $00`) during setup, then re-enabled with `LDA #$22 : 
 
 ### Coarse scrolling (`coarse_scroll_down`)
 
-Scrolls the viewport one pixel row down by adding **40** (one mode-E row width) to each LMS address in the display list. Both `SCRN_LO_DL` and `SCRN_HI_DL` are updated as full 16-bit adds (with carry propagation to the high byte). Adding only 1 instead of 40 is a common mistake — it shifts by one byte, not one row.
+Scrolls the viewport one row down by **subtracting 40** from each LMS address (both `SCRN_LO_DL` and `SCRN_HI_DL`) as a full 16-bit subtract with borrow. The LMS addresses start high (`$4FFF` / `$5E0F`) and decrease, implementing a reversed layout where the virtual screen is traversed top-to-bottom by moving the pointer backward through RAM.
 
-### Row address table
+The virtual screen is **384 rows tall** (double the visible 192), giving the scroll room to run before wrapping.
 
-`INIT_ROW_TABLE` pre-computes `ROW_TBL_LO` / `ROW_TBL_HI` (192 entries, stride 40) so `DRAW_SPR_FULL` and `CLEAR_SCREEN` can address any screen row without on-the-fly multiplication.
+### `CLEAR_SCREEN`
+
+Clears 384 × 40 = 15 360 bytes starting at `SCRN_LO` using a direct `ROWPTR` walk (+40 per row). Uses a 16-bit counter `ACC_X:X` to count past the 8-bit limit; terminates when `ACC_X:X = $01:$80` (= 384). No row table needed.
+
+### `DRAW_SPR_FULL`
+
+Draws `SPR_H` rows of `SPR_W` bytes each. The caller pre-loads `ROWPTR` with the destination address of the first row (column offset already added) and `SPRPTR` with the sprite data. The routine advances both pointers incrementally (`+SPR_W` and `+40` per row) and uses `LDX #SPR_H` as its own down-counter. No row table or row index is involved.
+
+For `MAN_Y0 = 0` the call site sets `ROWPTR = SCRN_LO + MAN_X0` as an assembler-time constant. For non-zero starting rows, the caller must compute `SCRN_LO + row × 40 + col` before calling.
 
 ### Memory map (`man_scroll.asm`)
 
 | Address | Contents |
 |---|---|
-| `$00B0`–`$00BF` | Zero-page variables (MAN_X, MAN_YL, accumulators, scratch) |
+| `$00B0`–`$00BB` | Zero-page variables (MAN_X, MAN_YL, accumulators, ROWPTR, SPRPTR, STEP_X/Y) |
 | `$2000` | `ANIM_MAIN` entry point |
 | `$2300` | `ANIM_DLIST` display list |
-| `$2400` | `ROW_TBL_LO` (192 bytes) |
-| `$24C0` | `ROW_TBL_HI` (192 bytes) |
-| `$2580` | Sprite data (`graphics/sprite_data.asm`) |
-| `$4010`–`$4FFF` | Screen RAM low half |
-| `$5000`–`$5E0F` | Screen RAM high half |
+| `$2400` | Sprite data (`graphics/sprite_data.asm`) |
+| `$4010`–`$4FFF` | Screen RAM low half (virtual rows, reversed) |
+| `$5000`–`$5E0F` | Screen RAM high half (virtual rows, reversed) |
