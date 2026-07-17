@@ -1,10 +1,13 @@
 """
-gen_title.py  –  generates 'der_tunnel.asm' gothic title screen
+gen_title.py  –  generates a gothic title screen .asm file
 
-Output: der_tunnel.asm   (ANTIC mode F, 320x192, mono)
+Usage:  python gen_title.py <text>
+Output: <text_with_underscores>.asm  (ANTIC mode F, 320x192, mono)
 
-Run:  python gen_title.py
+Example: python gen_title.py "Der Tunnel"  ->  Der_Tunnel.asm
 """
+
+import sys
 
 def row(s):
     """Convert a string of '#' and '.' to an integer (MSB = leftmost pixel)."""
@@ -14,39 +17,57 @@ def row(s):
         v = (v << 1) | (1 if ch == '#' else 0)
     return v
 
-from gothic_capital import FONT_D, FONT_T
-from gothic_small   import FONT_e, FONT_r, FONT_u, FONT_n, FONT_l
+import gothic_capital
+import gothic_small
 
-# --- space ---
-FONT_SPC = [row('........................')] * 32
+# Build font lookup from FONT_X attributes in both modules
+font = {}
+for _mod in (gothic_capital, gothic_small):
+    for _name in dir(_mod):
+        if _name.startswith('FONT_') and len(_name) == 6:
+            font[_name[5]] = getattr(_mod, _name)
+font[' '] = [row('........................')] * 32
+
+# --- command-line argument ---
+if len(sys.argv) < 2:
+    print("Usage: python gen_title.py <text>")
+    sys.exit(1)
+
+text_str = sys.argv[1]
+out_name = text_str.replace(' ', '_')
+out_path = out_name + '.asm'
+
+TEXT = []
+for ch in text_str:
+    if ch not in font:
+        print(f"Error: no glyph for '{ch}'")
+        sys.exit(1)
+    TEXT.append(font[ch])
 
 # ---------------------------------------------------------------------------
 # Layout
 #   Screen:  320 x 192 pixels  =  40 bytes x 192 rows
-#   Text:    "Der Tunnel"  = D e r SPC T u n n e l  (10 chars)
-#            24px each  → 240px = 30 bytes
-#   H-centre: left byte = (40 - 30) // 2 = 5
-#   V-centre: top row  = (192 - 32) // 2 = 80  → rows 80..111
+#   Each char: 24px wide = 3 bytes, 32px tall
 # ---------------------------------------------------------------------------
 
 SCREEN_W  = 40
 SCREEN_H  = 192
 CHAR_W_PX = 24
 CHAR_H    = 32
-NUM_CHARS = 10
-TEXT_BYTE_W = NUM_CHARS * CHAR_W_PX // 8   # = 30 bytes
+NUM_CHARS = len(TEXT)
+TEXT_BYTE_W = NUM_CHARS * CHAR_W_PX // 8
+LEFT_BYTE = (SCREEN_W - TEXT_BYTE_W) // 2
+TOP_ROW   = (SCREEN_H - CHAR_H) // 2
 
-LEFT_BYTE = (SCREEN_W - TEXT_BYTE_W) // 2  # = 5
-TOP_ROW   = (SCREEN_H - CHAR_H) // 2       # = 80
-
-TEXT = [FONT_D, FONT_e, FONT_r, FONT_SPC,
-        FONT_T, FONT_u, FONT_n, FONT_n, FONT_e, FONT_l]
+if LEFT_BYTE < 0:
+    print(f"Error: text '{text_str}' is {TEXT_BYTE_W} bytes wide, exceeds screen width of {SCREEN_W}")
+    sys.exit(1)
 
 # Build screen array
 screen = bytearray(SCREEN_W * SCREEN_H)
 
 for ci, glyph in enumerate(TEXT):
-    char_byte_start = LEFT_BYTE + ci * 3      # 3 bytes per char (24px)
+    char_byte_start = LEFT_BYTE + ci * 3
     for row_i, row_val in enumerate(glyph):
         screen_row = TOP_ROW + row_i
         base = screen_row * SCREEN_W + char_byte_start
@@ -55,13 +76,13 @@ for ci, glyph in enumerate(TEXT):
         screen[base+2] =  row_val        & 0xFF
 
 # Decorative horizontal rules above and below text
-for rule_row in (TOP_ROW - 4, TOP_ROW + CHAR_H + 3):
-    base = rule_row * SCREEN_W
-    for b in range(SCREEN_W):
-        screen[base + b] = 0xAA if b % 2 == 0 else 0x55
+# for rule_row in (TOP_ROW - 4, TOP_ROW + CHAR_H + 3):
+#     base = rule_row * SCREEN_W
+#     for b in range(SCREEN_W):
+#         screen[base + b] = 0xAA if b % 2 == 0 else 0x55
 
 # ---------------------------------------------------------------------------
-# Emit der_tunnel.asm  (only the non-zero band to keep file size down)
+# Emit .asm  (only the non-zero band to keep file size down)
 # ---------------------------------------------------------------------------
 
 band_rows  = TOP_ROW - 6
@@ -80,14 +101,14 @@ def bytes_as_mads(data, indent='        '):
     return '\n'.join(lines)
 
 asm = f"""; =============================================================================
-; der_tunnel.asm  –  "Der Tunnel" gothic title screen
+; {out_name}.asm  -  "{text_str}" gothic title screen
 ; ANTIC mode F (320x192 monochrome, 1 bpp)
 ;
-; Standalone:  mads.exe der_tunnel.asm -o:build/der_tunnel.xex
-; Integrated:  icl "der_tunnel.asm"  in tunnel.asm  (ORG below is kept)
+; Standalone:  mads.exe {out_name}.asm -o:build/{out_name}.xex
+; Integrated:  icl "{out_name}.asm"  in tunnel.asm  (ORG below is kept)
 ;
 ; Public entry point:
-;   JSR SHOW_TITLE   – displays title, waits for any key, then returns.
+;   JSR SHOW_TITLE   - displays title, waits for any key, then returns.
 ;                      Saves and restores the caller's display list.
 ;
 ; Memory reserved:
@@ -98,21 +119,25 @@ asm = f"""; ====================================================================
 ; $7000 ($6010 + 102*40 = $7000), avoiding an ANTIC 4K boundary wrap.
 ;
 ; To add to tunnel.asm:
-;   1.  icl "der_tunnel.asm"   anywhere after  ORG $2400
+;   1.  icl "{out_name}.asm"   anywhere after  ORG $2400
 ;   2.  JSR SHOW_TITLE          at the top of START, before the MAIN loop
 ; =============================================================================
 
         ORG $3800           ; safe standalone address; keep when icl'd
 
 TITLE_SCRN  = $6010
-TITLE_DLIST = $5F00
 
 SDLSTL   = $0230
 SDLSTH   = $0231
+SDMCTL   = $022F
 CH       = $02FC
+DMACTL   = $D400
+DLISTL   = $D402
+DLISTH   = $D403
 
 _DL_SAVE_L .BYTE 0
 _DL_SAVE_H .BYTE 0
+_DMA_SAVE  .BYTE 0
 
 ; ---------------------------------------------------------------------------
 ; SHOW_TITLE
@@ -140,7 +165,6 @@ _CLR_PAGE
         BNE _CLR_PAGE
 
         JSR _COPY_BAND
-        JSR _BUILD_DLIST
 
         LDA #$0F            ; COLPF1 = white pixels
         STA $02C5
@@ -151,106 +175,65 @@ _CLR_PAGE
 
         LDA #<TITLE_DLIST
         STA SDLSTL
+        STA DLISTL
         LDA #>TITLE_DLIST
         STA SDLSTH
+        STA DLISTH
+
+        LDA #$22
+        STA SDMCTL
+        STA DMACTL
+
+        JSR FADE
 
         LDA #$FF            ; clear keyboard buffer
         STA CH
+
 _WAIT_KEY
         CMP CH              ; loop until CH != $FF (key pressed)
         BEQ _WAIT_KEY
 
         LDA _DL_SAVE_L
         STA SDLSTL
+        STA DLISTL
         LDA _DL_SAVE_H
         STA SDLSTH
+        STA DLISTH
+        LDA _DMA_SAVE
+        STA SDMCTL
+        STA DMACTL
 
         RTS
 
-; ---------------------------------------------------------------------------
-; _BUILD_DLIST  –  ANTIC mode-F DL at TITLE_DLIST
-; 8 blank lines + 192 mode-F lines split at the 4K boundary ($7000):
-;   line 0..101 from $6010  (102 lines * 40 = 4080 bytes → ends at $6FFF)
-;   line 102..191 from $7000 ($6010 + 102*40 = $7000, no boundary crossing)
-; ---------------------------------------------------------------------------
-_BUILD_DLIST
-        LDA #<TITLE_DLIST
-        STA $FA
-        LDA #>TITLE_DLIST
-        STA $FB
-        LDY #0
+; -------------------------
+; Display list: tryb bitmapowy 320x192, 2 kolory
+; -------------------------
 
-        LDA #$70            ; 8 blank scan-line instructions
-        LDX #8
-_BLD_BLK
-        STA ($FA),Y
-        INY
-        DEX
-        BNE _BLD_BLK
+TITLE_DLIST
+        .BYTE $4F, a($6010)   ; pierwsza linia z LMS
+        :101 .BYTE $0F        ; kolejne linie 1..102
 
-        LDA #$4F            ; first LMS: mode F from $6010
-        STA ($FA),Y
-        INY
-        LDA #<TITLE_SCRN
-        STA ($FA),Y
-        INY
-        LDA #>TITLE_SCRN
-        STA ($FA),Y
-        INY
+        .BYTE $4F, a($7000)   ; nowy LMS od linii 102
+        :89 .BYTE $0F         ; kolejne linie 104..191
 
-        LDA #$0F            ; 101 mode-F lines (+ LMS line = 102)
-        LDX #101
-_BLD_F1
-        STA ($FA),Y
-        INY
-        DEX
-        BNE _BLD_F1
-
-        LDA #$4F            ; second LMS at 4K boundary: $6010 + 102*40 = $7000
-        STA ($FA),Y
-        INY
-        LDA #<(TITLE_SCRN+102*40)
-        STA ($FA),Y
-        INY
-        LDA #>(TITLE_SCRN+102*40)
-        STA ($FA),Y
-        INY
-
-        LDA #$0F            ; 89 mode-F lines (+ LMS line = 90; 102+90=192)
-        LDX #89
-_BLD_F2
-        STA ($FA),Y
-        INY
-        DEX
-        BNE _BLD_F2
-
-        LDA #$41            ; JVB back to start of display list
-        STA ($FA),Y
-        INY
-        LDA #<TITLE_DLIST
-        STA ($FA),Y
-        INY
-        LDA #>TITLE_DLIST
-        STA ($FA),Y
-
-        RTS
+        .BYTE $41, a(TITLE_DLIST)
 
 ; ---------------------------------------------------------------------------
-; _COPY_BAND  –  copy {len(band)} bytes of pre-rendered text to screen RAM
-; Source: _BAND_DATA   Dest: TITLE_SCRN + {band_rows}*40  (row {band_rows})
-; {band_pages} full pages + {band_rem} remainder bytes
+; _COPY_BAND  -  copy 1760 bytes of pre-rendered text to screen RAM
+; Source: _BAND_DATA   Dest: TITLE_SCRN + 74*40  (row 74)
+; 6 full pages + 224 remainder bytes
 ; ---------------------------------------------------------------------------
 _COPY_BAND
         LDA #<_BAND_DATA
         STA $FA
         LDA #>_BAND_DATA
         STA $FB
-        LDA #<({dest_addr})
+        LDA #<(TITLE_SCRN + 74 * 40)
         STA $FC
-        LDA #>({dest_addr})
+        LDA #>(TITLE_SCRN + 74 * 40)
         STA $FD
         LDY #0
-        LDX #{band_pages}
+        LDX #6
 _CP_PAGE
         LDA ($FA),Y
         STA ($FC),Y
@@ -260,7 +243,7 @@ _CP_PAGE
         INC $FD
         DEX
         BNE _CP_PAGE
-        LDX #{band_rem}     ; remaining bytes
+        LDX #224     ; remaining bytes
         BEQ _CP_DONE
 _CP_REM
         LDA ($FA),Y
@@ -272,11 +255,13 @@ _CP_DONE
         RTS
 
 ; ---------------------------------------------------------------------------
-; _BAND_DATA  –  pre-rendered screen rows {band_rows}..{band_end-1}
+; _BAND_DATA  -  pre-rendered screen rows {band_rows}..{band_end-1}
 ; {len(band)} bytes  =  {len(band)//40} rows x 40 bytes
 ; ---------------------------------------------------------------------------
 _BAND_DATA
 {bytes_as_mads(band)}
+
+        icl "Utils.asm"
 
 ; ---------------------------------------------------------------------------
 ; Standalone entry point  (remove JSR/JMP/RUNAD when icl'd into tunnel.asm)
@@ -290,11 +275,11 @@ _TITLE_MAIN
         .WORD _TITLE_MAIN
 """
 
-out_path = 'der_tunnel.asm'
 with open(out_path, 'w', encoding='utf-8') as f:
     f.write(asm)
 
 print(f"Written {out_path}")
+print(f"  Text: '{text_str}'  ({NUM_CHARS} chars, {TEXT_BYTE_W} bytes wide)")
 print(f"  Band: rows {band_rows}..{band_end-1}  ({len(band)} bytes = {band_pages} pages + {band_rem} bytes)")
-print(f"  Text: rows {TOP_ROW}..{TOP_ROW+CHAR_H-1}, bytes {LEFT_BYTE}..{LEFT_BYTE+TEXT_BYTE_W-1}")
+print(f"  Placed: rows {TOP_ROW}..{TOP_ROW+CHAR_H-1}, bytes {LEFT_BYTE}..{LEFT_BYTE+TEXT_BYTE_W-1}")
 print(f"  Char cell: {CHAR_W_PX}x{CHAR_H}px")

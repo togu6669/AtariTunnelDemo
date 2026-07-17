@@ -137,7 +137,7 @@ loop2   SEC
         INY
         dex
         bne loop2
-        
+
         SEC
         lda SCRN_HI_DL  ; move display list secondary address down by 40 bytes (1 row)
         sbc #40
