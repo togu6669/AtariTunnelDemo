@@ -15,6 +15,35 @@
       }
     },
     {
+      "label": "Build PASCAL",
+      "type": "shell",
+      "command": "../MP/bin/windows/mp.exe", 
+      "args": [
+          "${file}",
+          "-ipath:../MP/lib"
+      ],
+      "group": {
+          "kind": "build",
+          "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build A65",
+      "type": "shell",
+      "command": "../MADS/bin/windows_x86_64/mads.exe",
+      "args": [
+        "${file}",
+        "-x",
+        "-i:../MP/base", 
+        "-o:build/${fileBasenameNoExtension}.xex"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }, 
+    {
       "label": "Run in Altirra",
       "type": "shell",
       "command": "../Altirra/Altirra64.exe",

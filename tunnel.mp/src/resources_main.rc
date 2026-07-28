@@ -1,0 +1,12 @@
+
+;;;; dlists
+
+DL_CIRCLES_ADR rcasm 'dlists/dlist_circles.asm'
+ 
+MALE_ADDRESS rcdata '../assets/man.dta'
+FEMALE_ADDRESS rcdata '../assets/woman.dta'
+
+
+;rmt_player	RMTPLAY2	'../music/sfx_s.feat' 0
+;rmt_modul	RMT		'../music/sfx_s.rmt'
+

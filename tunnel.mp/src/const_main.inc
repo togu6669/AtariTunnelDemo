@@ -1,0 +1,17 @@
+MALE_ADDRESS = $4000;
+FEMALE_ADDRESS = $6000;
+CROSS_ADDRESS = $8000;
+
+DL_CIRCLES_ADR = $fd00;
+
+
+// f000-ff00 is for sfx/music
+RMT_PLAYER = $f000;
+RMT_MODUL = $f700;
+
+
+// new: sap
+SAP_PLAYER = $b000;
+SAP_PLAYER_3 = $b003;
+SAP_PLAYER_6 = $b006;
+

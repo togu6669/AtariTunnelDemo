@@ -1,5 +1,6 @@
 {
   "files.associations": {
-    "*.asm": "dasm"
-  }
-}
+    "*.asm": "dasm",
+    "madpascal.systemLibPath": "{../../MP/lib}",
+    "madpascal.formatterPath": "{../../FPC/bin/i386-win32/ptop.exe}"
+  }}
