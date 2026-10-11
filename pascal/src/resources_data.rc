@@ -1,0 +1,7 @@
+ADR_DASLEBEN rcdata '../assets/dasleben.apu'
+ADR_DERTOD rcdata '../assets/dertod.apu'
+ADR_DERTUNNEL rcdata '../assets/dertunnel.apu'
+ADR_DIEGEBURT rcdata '../assets/diegeburt.apu'
+ADR_MAN rcdata '../assets/man.apu'
+ADR_TUNNEL rcdata '../assets/tunnel.apu'
+ADR_WOMAN rcdata '../assets/woman.apu'

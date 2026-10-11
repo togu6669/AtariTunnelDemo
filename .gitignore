@@ -1,1 +1,4 @@
 *.lst
+__MACOSX/
+.DS_Store
+/pascal/tools/

@@ -1,0 +1,15 @@
+
+;;;; dlists
+
+DL_CIRCLES_ADR rcasm 'dlists/dlist_circles.asm'
+DL_TUNNEL_ADR rcasm 'dlists/dlist_tunnel.asm'
+DL_ZOOMOUT_ADR rcasm 'dlists/dlist_zoomout.asm'
+DL_TEXT_ADR rcasm 'dlists/dlist_text.asm'
+
+;MALE_ADDRESS rcdata '../assets/man.dta'
+;FEMALE_ADDRESS rcdata '../assets/woman.dta'
+;CROSS_ADDRESS rcdata '../assets/tunnel.dta'
+
+;rmt_player	RMTPLAY2	'../music/sfx_s.feat' 0
+;rmt_modul	RMT		'../music/sfx_s.rmt'
+

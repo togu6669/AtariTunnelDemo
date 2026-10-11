@@ -1,1 +1,0 @@
-enum { eSpeedyCodeLength = 512 };

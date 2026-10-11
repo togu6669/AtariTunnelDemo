@@ -15,13 +15,18 @@
       }
     },
     {
-      "label": "Build PASCAL",
-      "type": "shell",
-      "command": "../MP/bin/windows/mp.exe", 
+      "label": "Build PASCAL (active file)",
+      "type": "process",
+      "command": "${workspaceFolder}/../MP/bin/windows/mp.exe",
       "args": [
           "${file}",
-          "-ipath:../MP/lib"
+          "-code:0c00",
+          "-ipath:${workspaceFolder}/../MP/lib",
+          "-o:${workspaceFolder}/build/${fileBasenameNoExtension}.a65"
       ],
+      "options": {
+        "cwd": "${fileDirname}"
+      },
       "group": {
           "kind": "build",
           "isDefault": true
@@ -29,15 +34,45 @@
       "problemMatcher": []
     },
     {
+      "label": "Assemble generated A65",
+      "type": "process",
+      "command": "${workspaceFolder}/../MADS/bin/windows_x86_64/mads.exe",
+      "args": [
+        "${workspaceFolder}/build/${fileBasenameNoExtension}.a65",
+        "-x",
+        "-i:${workspaceFolder}/../MP/base",
+        "-o:${workspaceFolder}/build/${fileBasenameNoExtension}.xex"
+      ],
+      "options": {
+        "cwd": "${fileDirname}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build XEX from PASCAL",
+      "dependsOn": [
+        "Build PASCAL (active file)",
+        "Assemble generated A65"
+      ],
+      "dependsOrder": "sequence",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
       "label": "Build A65",
-      "type": "shell",
-      "command": "../MADS/bin/windows_x86_64/mads.exe",
+      "type": "process",
+      "command": "${workspaceFolder}/../MADS/bin/windows_x86_64/mads.exe",
       "args": [
         "${file}",
         "-x",
-        "-i:../MP/base", 
-        "-o:build/${fileBasenameNoExtension}.xex"
+        "-i:${workspaceFolder}/../MP/base",
+        "-o:${workspaceFolder}/build/${fileBasenameNoExtension}.xex"
       ],
+      "options": {
+        "cwd": "${workspaceFolder}/pascal/src"
+      },
       "group": {
         "kind": "build",
         "isDefault": true
